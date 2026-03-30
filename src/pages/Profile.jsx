@@ -31,21 +31,28 @@ export default function Profile() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    if (!profile?.id) { setError('ログイン情報が取得できません。再ログインしてください。'); return }
     setSaving(true)
     setError('')
     setSuccess(false)
-    const { error: err } = await supabase
-      .from('users')
-      .update(form)
-      .eq('id', profile.id)
-    if (err) {
-      setError(err.message)
-    } else {
-      await refreshProfile()
-      setSuccess(true)
-      setTimeout(() => setSuccess(false), 3000)
+    try {
+      const { data, error: err } = await supabase
+        .from('users')
+        .update(form)
+        .eq('id', profile.id)
+        .select()
+      if (err) {
+        setError(`保存エラー: ${err.message}`)
+      } else {
+        await refreshProfile()
+        setSuccess(true)
+        setTimeout(() => setSuccess(false), 3000)
+      }
+    } catch (e) {
+      setError(`予期しないエラー: ${e.message}`)
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   return (

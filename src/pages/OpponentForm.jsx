@@ -76,18 +76,25 @@ export default function OpponentForm() {
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.name.trim()) { setError('名前は必須です'); return }
+    if (!profile?.club_id) { setError('クラブ情報が取得できません。再ログインしてください。'); return }
     setSaving(true)
     setError('')
 
-    const payload = { ...form, club_id: profile.club_id }
-    if (!payload.member_user_id) payload.member_user_id = null
+    try {
+      const payload = { ...form, club_id: profile.club_id }
+      if (!payload.member_user_id) payload.member_user_id = null
 
-    const { error: err } = isEdit
-      ? await supabase.from('opponents').update(payload).eq('id', id)
-      : await supabase.from('opponents').insert(payload)
+      const { error: err } = isEdit
+        ? await supabase.from('opponents').update(payload).eq('id', id)
+        : await supabase.from('opponents').insert(payload)
 
-    if (err) { setError(err.message); setSaving(false); return }
-    navigate('/opponents')
+      if (err) { setError(`登録エラー: ${err.message}`); return }
+      navigate('/opponents')
+    } catch (e) {
+      setError(`予期しないエラー: ${e.message}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
