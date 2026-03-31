@@ -5,12 +5,14 @@ import Layout from '../components/Layout'
 
 const GRADES = ['小1', '小2', '小3', '小4', '小5', '小6', '中1', '中2', '中3', '高1', '高2', '高3', '一般']
 const RUBBER_TYPES = ['裏ソフト', '表ソフト', '粒高', 'アンチ', 'ラージ']
+const HANDEDNESS = ['右利き', '左利き', '両利き']
 
 export default function Profile() {
   const { profile, refreshProfile } = useAuth()
   const [form, setForm] = useState({
     name: '',
     grade: '',
+    handedness: '右利き',
     rubber_forehand: '裏ソフト',
     rubber_backhand: '裏ソフト',
   })
@@ -23,6 +25,7 @@ export default function Profile() {
       setForm({
         name: profile.name ?? '',
         grade: profile.grade ?? '',
+        handedness: profile.handedness ?? '右利き',
         rubber_forehand: profile.rubber_forehand ?? '裏ソフト',
         rubber_backhand: profile.rubber_backhand ?? '裏ソフト',
       })
@@ -95,6 +98,25 @@ export default function Profile() {
                 <option value="">選択してください</option>
                 {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">利き手</label>
+              <div className="flex gap-3">
+                {HANDEDNESS.map(h => (
+                  <label key={h} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="handedness"
+                      value={h}
+                      checked={form.handedness === h}
+                      onChange={e => setForm(f => ({ ...f, handedness: e.target.value }))}
+                      className="text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">{h}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <fieldset className="border border-gray-200 rounded-lg p-4">

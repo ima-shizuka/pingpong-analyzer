@@ -6,6 +6,7 @@ import Layout from '../components/Layout'
 
 const GRADES = ['小1', '小2', '小3', '小4', '小5', '小6', '中1', '中2', '中3', '高1', '高2', '高3', '一般']
 const RUBBER_TYPES = ['裏ソフト', '表ソフト', '粒高', 'アンチ', 'ラージ']
+const HANDEDNESS = ['右利き', '左利き', '両利き']
 
 export default function OpponentForm() {
   const { id } = useParams()
@@ -16,6 +17,7 @@ export default function OpponentForm() {
   const [form, setForm] = useState({
     name: '',
     grade: '',
+    handedness: '右利き',
     team_name_1: '',
     team_name_2: '',
     team_name_3: '',
@@ -44,6 +46,7 @@ export default function OpponentForm() {
         if (data) setForm({
           name: data.name ?? '',
           grade: data.grade ?? '',
+          handedness: data.handedness ?? '右利き',
           team_name_1: data.team_name_1 ?? '',
           team_name_2: data.team_name_2 ?? '',
           team_name_3: data.team_name_3 ?? '',
@@ -60,7 +63,7 @@ export default function OpponentForm() {
   function handleMemberSelect(userId) {
     const m = members.find(m => m.id === userId)
     if (!m) {
-      setForm(f => ({ ...f, member_user_id: '', name: '', grade: '', rubber_forehand: '裏ソフト', rubber_backhand: '裏ソフト' }))
+      setForm(f => ({ ...f, member_user_id: '', name: '', grade: '', handedness: '右利き', rubber_forehand: '裏ソフト', rubber_backhand: '裏ソフト' }))
       return
     }
     setForm(f => ({
@@ -68,6 +71,7 @@ export default function OpponentForm() {
       member_user_id: userId,
       name: m.name,
       grade: m.grade ?? '',
+      handedness: m.handedness ?? '右利き',
       rubber_forehand: m.rubber_forehand ?? '裏ソフト',
       rubber_backhand: m.rubber_backhand ?? '裏ソフト',
     }))
@@ -147,6 +151,25 @@ export default function OpponentForm() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="田中 二郎"
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">利き手</label>
+              <div className="flex gap-3">
+                {HANDEDNESS.map(h => (
+                  <label key={h} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="handedness"
+                      value={h}
+                      checked={form.handedness === h}
+                      onChange={e => setForm(f => ({ ...f, handedness: e.target.value }))}
+                      className="text-blue-600"
+                    />
+                    <span className="text-sm text-gray-700">{h}</span>
+                  </label>
+                ))}
+              </div>
             </div>
 
             <div>
