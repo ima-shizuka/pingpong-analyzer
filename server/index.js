@@ -156,45 +156,96 @@ app.post('/analyze', async (req, res) => {
     // Claude APIに送るメッセージを構築
     const content = []
 
-    // テキスト情報
+    // 選手情報テキスト生成
     const playersInfo = players?.map(p => {
       const person = p.users ?? p.opponents
-      return `${p.side === 'left' ? '左側' : '右側'} ${p.position}人目: ${person?.name ?? '不明'} (フォア:${person?.rubber_forehand ?? '不明'}, バック:${person?.rubber_backhand ?? '不明'})`
+      const teams = p.opponents ? [p.opponents.team_name_1, p.opponents.team_name_2, p.opponents.team_name_3].filter(Boolean).join('/') : ''
+      return [
+        `【${p.side === 'left' ? '左側' : '右側'}${p.position}番】${person?.name ?? '不明'}`,
+        `  利き手: ${person?.handedness ?? '不明'}`,
+        `  フォアラバー: ${person?.rubber_forehand ?? '不明'}`,
+        `  バックラバー: ${person?.rubber_backhand ?? '不明'}`,
+        `  学年: ${person?.grade ?? '不明'}`,
+        teams ? `  所属: ${teams}` : '',
+      ].filter(Boolean).join('\n')
     }).join('\n')
+
+    // コーチメモ
+    const coachMemoText = match?.coach_memo
+      ? `\n【コーチ・本人メモ】\n${match.coach_memo}\n` : ''
+
+    // 過去分析
+    const pastText = pastAnalyses.length > 0
+      ? `【過去の分析結果（直近${pastAnalyses.length}回）】\n${pastAnalyses.map((pa, i) => `--- 過去${i+1}回目 (${new Date(pa.created_at).toLocaleDateString('ja-JP')}) ---\n${JSON.stringify(pa.result_json, null, 2)}`).join('\n\n')}\n`
+      : ''
 
     content.push({
       type: 'text',
-      text: `あなたは卓球の専門コーチです。以下の試合動画のフレーム画像を分析して、JSON形式で結果を返してください。
+      text: `あなたは日本の卓球専門コーチです。以下の試合フレーム画像を詳細に分析し、指定のJSON形式のみで回答してください。
 
-【試合情報】
+【試合基本情報】
 - 試合形式: ${match?.match_type === 'doubles' ? 'ダブルス' : 'シングルス'}
-- 日時: ${match?.played_at ?? '不明'}
+- 日時: ${match?.played_at ? new Date(match.played_at).toLocaleString('ja-JP') : '不明'}
 
 【選手情報】
 ${playersInfo}
+${coachMemoText}
+${pastText}
+${selfPlayer ? '※ 分析依頼者が出場しています。selfTasksには具体的な改善課題を記載してください。' : ''}
+${pastAnalyses.length > 0 ? '※ 過去の分析と比較し、変化・改善・悪化をdiffFromLastTimeに記載してください。' : ''}
 
-${pastAnalyses.length > 0 ? `【過去の分析結果（参考）】\n${pastAnalyses.map((pa, i) => `分析${i + 1}: ${JSON.stringify(pa.result_json)}`).join('\n')}` : ''}
+【分析指示】
+フレーム画像から以下を詳しく読み取ってください：
 
-${selfPlayer ? '※ 分析依頼者は左側のプレイヤーとして出場しています。selfTasksフィールドに自分の課題を含めてください。' : ''}
-${pastAnalyses.length > 0 ? '※ 過去の分析との違いをdiffFromLastTimeフィールドに記載してください。' : ''}
+1. サーブ回転の判定（重要）:
+   - ラケット面の角度（前向き=下回転、上向き=上回転、横=横回転）
+   - スイング方向（下から上=上回転、上から下=下回転、横=横回転）
+   - インパクト位置（ラバー面のどこで当てているか）
+   - トスの高さと位置
+   ※ 断定できない場合は「〇〇回転の可能性が高い」と表記
 
-以下のJSON形式で回答してください：
+2. コース分析:
+   - フォア前・バック前・ミドル・ロング
+   - クロス or ストレート
+   - 短い or 長い
+
+3. 得点パターン:
+   - どのような展開で得点しているか
+   - どのような場面でミスしているか
+   - ミスの原因（体勢・タイミング・コース判断など）
+
+4. フォーム・動き:
+   - 構えの特徴
+   - フットワークのパターン
+   - バックスイングの大きさ・速さ
+
+以下のJSON形式のみで回答してください（他の文字は一切含めないこと）：
 {
-  "weaknesses": "相手の弱点（具体的な技術・体勢・心理面）",
-  "servePattern": "サーブの特徴と有効な対策",
-  "attackDefensePattern": "攻守のパターン（どんな状況で攻めるか、守るか）",
-  "gamePlan": {
-    "early": "序盤の戦略",
-    "mid": "中盤の戦略",
-    "late": "終盤の戦略"
+  "serveAnalysis": {
+    "types": ["確認されたサーブの種類（例：下回転ショートサーブ、横回転ロングサーブ等）"],
+    "spinDetails": "回転の詳細（ラケット角度・スイング方向から判定した根拠も含める）",
+    "favoriteServe": "最も多く使っているサーブ",
+    "coursePattern": "サーブコースのパターン（フォア前多め・ミドル多め等）",
+    "counterStrategy": "このサーブに対する有効なレシーブ戦略"
   },
-  "habits": "プレーの癖・傾向（フォームや動き方など）",
-  "winLoseFactor": "この試合の勝因または敗因",
-  "selfTasks": "自分が出場した場合の課題と次戦への対策（出場していない場合はnull）",
-  "diffFromLastTime": "前回の分析との違い（初回の場合はnull）"
-}
-
-JSON以外の文字は含めないでください。`
+  "scoringPattern": {
+    "howTheyScore": "どのような展開・技術で得点しているか",
+    "howTheyLose": "どのような場面でミスや失点しているか",
+    "missReasons": "ミスの主な原因（体勢・タイミング・コース判断・ラバー特性等）",
+    "rallyTendency": "ラリーの傾向（早いテンポ/遅いテンポ、強打多め/つなぎ多め等）"
+  },
+  "weaknesses": "弱点の詳細（具体的な技術・体勢・コース・心理面）",
+  "habits": "プレーの癖・傾向（フォーム・動き方・特定状況でのパターン）",
+  "attackDefensePattern": "攻守のパターン（どんな状況で攻めるか守るか、3球目攻撃の有無等）",
+  "gamePlan": {
+    "early": "序盤の戦略（サーブ選択・レシーブ戦略）",
+    "mid": "中盤の戦略（ラリー展開・コース選択）",
+    "late": "終盤・デュース時の戦略"
+  },
+  "winLoseFactor": "この試合の勝因または敗因（具体的な場面・技術レベルで）",
+  "selfTasks": ${selfPlayer ? '"自分の具体的な改善課題と練習方法の提案（出場者向け）"' : 'null'},
+  "diffFromLastTime": ${pastAnalyses.length > 0 ? '"前回の分析との比較（改善点・悪化点・新たに発見した癖）"' : 'null'}
+}`
     })
 
     // フレーム画像を追加（最大20枚）
@@ -217,7 +268,7 @@ JSON以外の文字は含めないでください。`
     // Claude API呼び出し
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 2000,
+      max_tokens: 4000,
       messages: [{ role: 'user', content }],
     })
 

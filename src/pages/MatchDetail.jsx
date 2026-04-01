@@ -5,14 +5,15 @@ import { useAuth } from '../contexts/AuthContext'
 import Layout from '../components/Layout'
 
 const ANALYSIS_TABS = [
-  { key: 'weaknesses', label: '弱点' },
-  { key: 'servePattern', label: 'サーブ' },
-  { key: 'attackDefensePattern', label: '攻守パターン' },
-  { key: 'gamePlan', label: 'ゲームプラン' },
-  { key: 'habits', label: '癖' },
-  { key: 'winLoseFactor', label: '勝因・敗因' },
-  { key: 'selfTasks', label: '自分の課題' },
-  { key: 'diffFromLastTime', label: '前回との差' },
+  { key: 'serveAnalysis', label: '🏓 サーブ分析' },
+  { key: 'scoringPattern', label: '📊 得点パターン' },
+  { key: 'weaknesses', label: '⚠️ 弱点' },
+  { key: 'attackDefensePattern', label: '⚔️ 攻守' },
+  { key: 'gamePlan', label: '🎯 戦略' },
+  { key: 'habits', label: '👁 癖' },
+  { key: 'winLoseFactor', label: '🏆 勝敗因' },
+  { key: 'selfTasks', label: '📝 自分の課題' },
+  { key: 'diffFromLastTime', label: '🔄 前回比較' },
 ]
 
 export default function MatchDetail() {
@@ -23,9 +24,12 @@ export default function MatchDetail() {
   const [frames, setFrames] = useState([])
   const [analyses, setAnalyses] = useState([])
   const [analyzing, setAnalyzing] = useState(false)
-  const [activeTab, setActiveTab] = useState('weaknesses')
+  const [activeTab, setActiveTab] = useState('serveAnalysis')
   const [compareIdx, setCompareIdx] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [coachMemo, setCoachMemo] = useState('')
+  const [savingMemo, setSavingMemo] = useState(false)
+  const [memoSaved, setMemoSaved] = useState(false)
 
   useEffect(() => {
     load()
@@ -44,15 +48,24 @@ export default function MatchDetail() {
     return () => supabase.removeChannel(channel)
   }, [id])
 
+  async function saveMemo() {
+    setSavingMemo(true)
+    await supabase.from('matches').update({ coach_memo: coachMemo }).eq('id', id)
+    setSavingMemo(false)
+    setMemoSaved(true)
+    setTimeout(() => setMemoSaved(false), 2000)
+  }
+
   async function load() {
     const [{ data: m }, { data: p }, { data: a }] = await Promise.all([
       supabase.from('matches').select('*').eq('id', id).single(),
-      supabase.from('match_players').select('*, users:member_user_id(name, rubber_forehand, rubber_backhand), opponents:opponent_id(name, rubber_forehand, rubber_backhand)').eq('match_id', id),
+      supabase.from('match_players').select('*, users:member_user_id(name, rubber_forehand, rubber_backhand, handedness), opponents:opponent_id(name, rubber_forehand, rubber_backhand, handedness)').eq('match_id', id),
       supabase.from('analysis_results').select('*').eq('match_id', id).order('created_at', { ascending: false }),
     ])
     setMatch(m)
     setPlayers(p ?? [])
     setAnalyses(a ?? [])
+    setCoachMemo(m?.coach_memo ?? '')
     if (m?.frame_status === 'done') await loadFrames()
     setLoading(false)
   }
@@ -171,40 +184,71 @@ export default function MatchDetail() {
           </div>
         )}
 
+        {/* コーチ・本人メモ */}
+        <div className="bg-white rounded-xl shadow-sm border p-5 mb-4">
+          <h3 className="font-semibold text-gray-700 mb-2">📝 コーチ・本人メモ</h3>
+          <p className="text-xs text-gray-400 mb-2">
+            気づいた点・サーブの種類・ミスのパターンなど自由に記録してください。AI分析時に参考情報として使用されます。
+          </p>
+          <textarea
+            value={coachMemo}
+            onChange={e => setCoachMemo(e.target.value)}
+            rows={4}
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            placeholder="例：相手は下回転サーブが多め。バック側が弱い。3球目はフォアドライブを狙ってくる..."
+          />
+          <div className="flex items-center justify-end mt-2 gap-2">
+            {memoSaved && <span className="text-xs text-green-600">保存しました ✓</span>}
+            <button
+              type="button"
+              onClick={saveMemo}
+              disabled={savingMemo}
+              className="text-sm bg-gray-700 hover:bg-gray-800 text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            >
+              {savingMemo ? '保存中...' : 'メモを保存'}
+            </button>
+          </div>
+        </div>
+
         {/* 分析結果 */}
         {latestAnalysis && (
           <div className="bg-white rounded-xl shadow-sm border p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-700">分析結果</h3>
-              {analyses.length > 1 && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-gray-500">比較：</span>
+              <div>
+                <h3 className="font-semibold text-gray-700">AI分析結果</h3>
+                <p className="text-xs text-gray-400">{new Date(latestAnalysis.created_at).toLocaleString('ja-JP')}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {analyses.length > 1 && (
                   <select
                     value={compareIdx ?? ''}
                     onChange={e => setCompareIdx(e.target.value === '' ? null : Number(e.target.value))}
                     className="border border-gray-300 rounded-lg px-2 py-1 text-xs"
                   >
-                    <option value="">なし</option>
+                    <option value="">比較なし</option>
                     {analyses.slice(1).map((a, i) => (
                       <option key={i + 1} value={i + 1}>
-                        {new Date(a.created_at).toLocaleDateString('ja-JP')}の分析
+                        {new Date(a.created_at).toLocaleDateString('ja-JP')}と比較
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
+                )}
+                {canAnalyze && !analyzing && (
+                  <button onClick={startAnalysis} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+                    再分析
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* タブ */}
-            <div className="flex gap-1 overflow-x-auto pb-1 mb-4">
+            <div className="flex gap-1 overflow-x-auto pb-2 mb-4 border-b">
               {ANALYSIS_TABS.map(t => (
                 <button
                   key={t.key}
                   onClick={() => setActiveTab(t.key)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                    activeTab === t.key
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    activeTab === t.key ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
                   {t.label}
@@ -213,11 +257,9 @@ export default function MatchDetail() {
             </div>
 
             {/* タブコンテンツ */}
-            <div className="grid grid-cols-1 gap-4" style={{ gridTemplateColumns: compareResult ? '1fr 1fr' : '1fr' }}>
-              <AnalysisSection data={result[activeTab]} label="最新の分析" />
-              {compareResult && (
-                <AnalysisSection data={compareResult[activeTab]} label="比較" muted />
-              )}
+            <div className={compareResult ? 'grid grid-cols-2 gap-4' : ''}>
+              <AnalysisSection data={result[activeTab]} label={compareResult ? '最新' : null} />
+              {compareResult && <AnalysisSection data={compareResult[activeTab]} label="比較" muted />}
             </div>
           </div>
         )}
@@ -226,15 +268,24 @@ export default function MatchDetail() {
           <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-400">
             <div className="text-4xl mb-3">📊</div>
             <p>分析はまだ実行されていません</p>
-            <p className="text-sm mt-1">「分析開始」を押してAI分析を実行してください</p>
+            <p className="text-sm mt-1">上のメモを入力してから「分析開始」を押してください</p>
+            {!analyzing ? (
+              <button onClick={startAnalysis} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg text-sm font-medium">
+                📊 分析開始
+              </button>
+            ) : (
+              <div className="mt-4 flex items-center justify-center gap-2 text-blue-600 text-sm">
+                <div className="animate-spin w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full" />
+                AI分析中...
+              </div>
+            )}
           </div>
         )}
 
         {!canAnalyze && frameStatus !== 'done' && (
           <div className="bg-white rounded-xl shadow-sm border p-8 text-center text-gray-400">
             <div className="text-4xl mb-3">⏳</div>
-            <p>フレーム抽出を待機中...</p>
-            <p className="text-sm mt-1">完了後に分析が可能になります</p>
+            <p>フレーム処理待ち...</p>
           </div>
         )}
       </div>
@@ -254,8 +305,44 @@ function FrameStatusBadge({ status }) {
 }
 
 function AnalysisSection({ data, label, muted }) {
-  if (!data) return <div className="text-sm text-gray-400 italic">データなし</div>
-  const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+  if (!data) return <div className="text-sm text-gray-400 italic py-4 text-center">このデータは含まれていません</div>
+
+  // オブジェクトの場合はキーごとに表示
+  if (typeof data === 'object' && !Array.isArray(data)) {
+    return (
+      <div>
+        {label && <div className={`text-xs font-medium mb-3 ${muted ? 'text-gray-400' : 'text-blue-600'}`}>{label}</div>}
+        <div className="space-y-3">
+          {Object.entries(data).map(([key, val]) => (
+            <div key={key} className="bg-gray-50 rounded-lg p-3">
+              <div className="text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wide">{key}</div>
+              <div className={`text-sm leading-relaxed ${muted ? 'text-gray-400' : 'text-gray-700'}`}>
+                {Array.isArray(val) ? val.join('、') : (val ?? 'データなし')}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // 配列の場合
+  if (Array.isArray(data)) {
+    return (
+      <div>
+        {label && <div className={`text-xs font-medium mb-2 ${muted ? 'text-gray-400' : 'text-blue-600'}`}>{label}</div>}
+        <ul className="space-y-1">
+          {data.map((item, i) => (
+            <li key={i} className={`text-sm flex gap-2 ${muted ? 'text-gray-400' : 'text-gray-700'}`}>
+              <span className="text-blue-400 mt-0.5">•</span><span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  const text = String(data)
   return (
     <div>
       {label && <div className={`text-xs font-medium mb-2 ${muted ? 'text-gray-400' : 'text-blue-600'}`}>{label}</div>}
