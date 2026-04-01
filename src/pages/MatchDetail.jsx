@@ -77,20 +77,24 @@ export default function MatchDetail() {
 
   async function startAnalysis() {
     if (!match) return
+    const renderUrl = import.meta.env.VITE_RENDER_API_URL
+    if (!renderUrl) {
+      alert('分析サーバー（Render）がまだ設定されていません。\nVITE_RENDER_API_URLをVercelの環境変数に設定してください。')
+      return
+    }
     setAnalyzing(true)
     try {
-      const renderUrl = import.meta.env.VITE_RENDER_API_URL
       const resp = await fetch(`${renderUrl}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          matchId: match.id,
-          userId: profile.id,
-        }),
+        body: JSON.stringify({ matchId: match.id, userId: profile.id }),
       })
+      if (!resp.ok) {
+        const text = await resp.text()
+        throw new Error(`サーバーエラー (${resp.status}): ${text.slice(0, 100)}`)
+      }
       const result = await resp.json()
       if (result.error) throw new Error(result.error)
-      // 分析結果リロード
       const { data: a } = await supabase
         .from('analysis_results')
         .select('*')
@@ -98,7 +102,7 @@ export default function MatchDetail() {
         .order('created_at', { ascending: false })
       setAnalyses(a ?? [])
     } catch (err) {
-      alert('分析に失敗しました: ' + err.message)
+      alert('分析に失敗しました:\n' + err.message)
     } finally {
       setAnalyzing(false)
     }
